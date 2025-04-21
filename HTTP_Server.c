@@ -9,11 +9,38 @@
 
 void *connection_handler(void *socket_desc) {
     int sock = *(int*)socket_desc;
-    char *hello = "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: 12\n\nHello, world!";
-    write(sock, hello, strlen(hello));
+    free(socket_desc);
+
+    char buffer[1024] = {0};
+    char method[16] = {0};
+    char url[1024] = {0};
+    char protocol[16] = {0};
+
+    // Read from client
+    read(sock, buffer, sizeof(buffer) - 1);
+    printf("Received request:\n%s\n", buffer);
+
+    // Parse method, url, and protocol
+    sscanf(buffer, "%15s %1023s %15s", method, url, protocol);
+
+    // Construct the response
+    char response[2048];
+    snprintf(response, sizeof(response),
+        "HTTP/1.1 200 OK\n"
+        "Content-Type: text/html\n"
+        "Content-Length: %zu\n"
+        "Method: %s\n"
+        "URL: %s\n"
+        "Protocol: %s\n\n"
+        "Hello, world!\n\n",
+        strlen("Hello, world!") + 2, // +2 for the trailing newlines
+        method, url, protocol
+    );
+
+    // Send response
+    write(sock, response, strlen(response));
     printf("Response sent\n");
     close(sock);
-    free(socket_desc);
     return NULL;
 }
 
@@ -22,7 +49,6 @@ int main() {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     
-    // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("socket failed");
         exit(EXIT_FAILURE);
@@ -30,10 +56,9 @@ int main() {
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons( PORT );
+    address.sin_port = htons(PORT);
     
-    // Forcefully attaching socket to the port 8080
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) {
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
@@ -43,8 +68,8 @@ int main() {
         exit(EXIT_FAILURE);
     }
     
-    while(1) {
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
+    while (1) {
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
@@ -58,7 +83,6 @@ int main() {
             exit(EXIT_FAILURE);
         }
         
-        // Detach the thread so it doesn't need to be joined
         pthread_detach(thread);
     }
     
